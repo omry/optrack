@@ -7,13 +7,21 @@ from typing import List, Optional
 from pymongo import MongoClient
 
 
+class Action(Enum):
+    BUY_TO_OPEN = 0
+    BUY_TO_CLOSE = 1
+    SELL_TO_CLOSE = 2
+    SELL_TO_OPEN = 3
+
+
 @dataclass(frozen=True)
 class CSVLine:
     # Transaction date
-    date: date
+    str_date: str  # as string
+    date: date  # as date
 
     # Transaction type
-    action: str
+    action: Action
 
     # Symbol
     symbol: str
@@ -34,9 +42,21 @@ class CSVLine:
     amount: Decimal
 
     @staticmethod
-    def init_from_str_array(line : List[str]) -> "CSVLine":
-        date = datetime.strptime(line[0], "%m/%d/%Y").date()
-        action = line[1] # TODO: convert to enum
+    def init_from_str_array(line: List[str]) -> "CSVLine":
+        date = datetime.strptime(line[0], "%m/%d/%Y")
+        actions = {
+            "Buy to Open": Action.BUY_TO_OPEN,
+            "Buy to Close": Action.BUY_TO_CLOSE,
+            "Sell to Open": Action.SELL_TO_OPEN,
+            "Sell to Close": Action.SELL_TO_CLOSE,
+        }
+
+        try:
+            action = actions[line[1]]
+        except KeyError:
+            raise ValueError(
+                f"Unsupported action {line[1]}, supported one of {actions.keys()}"
+            )
         symbol = line[2]
         desc = line[3]
         quantity = int(line[4])
@@ -47,7 +67,17 @@ class CSVLine:
         assert line[7][0] == "$"
         amount = Decimal(line[7][1:])
 
-        return CSVLine(date=date, action=action, symbol=symbol, desc=desc, quantity=quantity, price=price, fees=fees, amount=amount,)
+        return CSVLine(
+            str_date=line[0],
+            date=date,
+            action=action,
+            symbol=symbol,
+            desc=desc,
+            quantity=quantity,
+            price=price,
+            fees=fees,
+            amount=amount,
+        )
 
     def is_option(self) -> bool:
         return self.action in (
@@ -58,7 +88,7 @@ class CSVLine:
         )
 
     def key(self) -> str:
-        return f"{self.date}:{self.action}_#{self.quantity}_{self.symbol}@{self.price}"
+        return f"{self.date}:{self.action.value}_#{self.quantity}_{self.symbol}@{self.price}"
 
 
 class Strategy(Enum):
@@ -115,6 +145,10 @@ def import_csv(client: MongoClient, lines: List[CSVLine]) -> None:
         now = datetime.utcnow()
         insert = asdict(line)
         insert["insertion_date"] = now
+        insert["action"] = insert["action"].name
+        insert["fees"] = f"${insert['fees']}"
+        insert["price"] = f"${insert['price']}"
+        insert["amount"] = f"${insert['amount']}"
         if line.is_option():
             tokens = line.symbol.split(" ")
             insert["underlying"] = tokens[0]
@@ -140,7 +174,7 @@ def get_positions(client: MongoClient) -> List[Position]:
     ret = trans.find(
         {
             "underlying": {"$exists": 1},
-            "action": {"$in": ["Buy to Open", "Sell to Open"]},
+            "action": {"$in": ["BUY_TO_OPEN", "SELL_TO_OPEN"]},
         }
     )
     positions = []
