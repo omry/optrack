@@ -10,7 +10,7 @@ from pymongo import MongoClient
 @dataclass(frozen=True)
 class CSVLine:
     # Transaction date
-    date: str
+    date: date
 
     # Transaction type
     action: str
@@ -25,13 +25,29 @@ class CSVLine:
     quantity: int
 
     # Transaction price/proceeds (per stock/option contract)
-    price: float
+    price: Decimal
 
     # Transaction fees
-    fees: float
+    fees: Decimal
 
     # Total cost/proceeds
-    amount: float
+    amount: Decimal
+
+    @staticmethod
+    def init_from_str_array(line : List[str]) -> "CSVLine":
+        date = datetime.strptime(line[0], "%m/%d/%Y").date()
+        action = line[1] # TODO: convert to enum
+        symbol = line[2]
+        desc = line[3]
+        quantity = int(line[4])
+        assert line[5][0] == "$"
+        price = Decimal(line[5][1:])
+        assert line[6][0] == "$"
+        fees = Decimal(line[6][1:])
+        assert line[7][0] == "$"
+        amount = Decimal(line[7][1:])
+
+        return CSVLine(date=date, action=action, symbol=symbol, desc=desc, quantity=quantity, price=price, fees=fees, amount=amount,)
 
     def is_option(self) -> bool:
         return self.action in (
@@ -86,7 +102,9 @@ def load_csv(file: str) -> List[CSVLine]:
         next(reader)  # skip header
         for row in reader:
             row = row[0:8]  # Schwab has a trailing comma, strip the last empty item
-            lines.append(CSVLine(*row))
+
+            cl = CSVLine.init_from_str_array(row)
+            lines.append(cl)
 
     return lines
 
@@ -99,7 +117,7 @@ def import_csv(client: MongoClient, lines: List[CSVLine]) -> None:
         insert["insertion_date"] = now
         if line.is_option():
             tokens = line.symbol.split(" ")
-            insert["under/lying"] = tokens[0]
+            insert["underlying"] = tokens[0]
             insert["expiration"] = tokens[1]
             insert["strike"] = tokens[2]
             insert["option_type"] = "PUT" if tokens[3] == "P" else "CALL"
