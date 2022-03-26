@@ -1,0 +1,5 @@
+/outputs/
+/*.CSV
+__pycache__
+.pytest_cache
+optrack.egg-info

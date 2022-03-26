@@ -1,0 +1,11 @@
+input:
+  file: Personal_account_Transactions_20220318-025052.CSV
+
+db:
+  url: mongodb://localhost:27017
+
+action: list
+
+hydra:
+  job:
+    chdir: false
