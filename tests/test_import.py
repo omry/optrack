@@ -94,12 +94,33 @@ def test_open1():
         Strategy.CUSTOM,
         legs=[
             Leg(
-                symbol="SHOP",
-                expiration=date(2022, 4, 22),
+                symbol="SHOP 04/22/2022 550.00 P",
                 quantity=-1,
                 open_price=Decimal("21.07"),
                 close_price=None,
                 lines=[csv[0]],
             )
+        ],
+    )
+
+def test_open1_two_transactions():
+    client = mongomock.MongoClient()
+    file = Path(__file__).parent.absolute() / "data" / "open1_two_transactions.csv"
+    csv = load_csv(file)
+    import_csv(client, csv)
+
+    pos = get_positions(client)
+
+    assert len(pos) == 1
+    assert pos[0] == Position(
+        Strategy.CUSTOM,
+        legs=[
+            Leg(
+                symbol="SHOP 04/22/2022 550.00 P",
+                quantity=-5,
+                open_price=Decimal("21.60"),
+                close_price=None,
+                lines=[csv[0], csv[1]],
+            ),
         ],
     )

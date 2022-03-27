@@ -2,7 +2,7 @@ from dataclasses import asdict, dataclass, field
 from datetime import date, datetime
 from decimal import Decimal
 from enum import Enum
-from typing import List, Optional
+from typing import List, Optional, Any
 
 from pymongo import MongoClient
 
@@ -118,12 +118,11 @@ class Strategy(Enum):
 @dataclass
 class Leg:
     symbol: str
-    expiration: date
     # number of contracts in this leg. This is the sum of opening contract lines
     # negative value means short positions
-    quantity: int
+    quantity: Optional[int] = None
     # average price for open
-    open_price: Decimal
+    open_price: Optional[Decimal] = None
     # average price for close
     close_price: Optional[Decimal] = None
 
@@ -131,11 +130,63 @@ class Leg:
     # e.g. multiple transaction opening (selling 2 contracts in two transactions).
     lines: List[CSVLine] = field(default_factory=lambda: list())
 
+    # update all computed fields
+    def finalize(self) -> None:
+        opens = []
+        closes = []
+        for cl in self.lines:
+            if cl.action in [Action.SELL_TO_OPEN, Action.BUY_TO_OPEN]:
+                opens.append((cl.price, cl.quantity))
+            if cl.action in [Action.SELL_TO_CLOSE, Action.BUY_TO_CLOSE]:
+                closes.append((cl.price, cl.quantity))
+
+        def wavg(lst : Any) -> Decimal:
+            s = 0
+            t = 0
+            for a in lst:
+                s += a[0] * a[1]
+                t += a[1]
+            return Decimal(s / t)
+
+        if len(opens) > 0:
+            self.open_price = wavg(opens)
+        if len(closes) > 0:
+            self.close_price = wavg(closes)
+
+        quantity = 0
+        for cl in self.lines:
+            if cl.action in [Action.BUY_TO_OPEN, Action.BUY_TO_CLOSE]:
+                quantity += cl.quantity
+            if cl.action in [Action.SELL_TO_OPEN, Action.SELL_TO_CLOSE]:
+                quantity -= cl.quantity
+
+        self.quantity = quantity
+
+    def is_closed(self) -> bool:
+        return self.quantity == 0
 
 @dataclass
 class Position:
     strategy: Strategy
     legs: List[Leg] = field(default_factory=lambda: list())
+
+    def is_closed(self) -> bool:
+        return all(map(lambda l: l.is_closed(), self.legs))
+
+    def add_leg(self, leg) -> None:
+        found_leg = None
+        for sl in self.legs:
+            if sl.symbol == leg.symbol:
+                found_leg = sl
+                break
+        if found_leg is None:
+            self.legs.append(leg)
+            found_leg = leg
+        else:
+            for cl in leg.lines:
+                found_leg.lines.append(cl)
+
+        found_leg.finalize()
 
 
 def load_csv(file: str) -> List[CSVLine]:
@@ -194,21 +245,27 @@ def get_positions(client: MongoClient) -> List[Position]:
         }
     )
 
+
+    positions_map = {}
     positions = []
     for x in ret:
-        exp = datetime.strptime(x["expiration"], "%m/%d/%Y").date()
-        quantity = x["quantity"] if x["action"] in ["BUY_TO_OPEN"] else -x["quantity"]
         assert x["price"][0] == "$"
-        open_price = Decimal(x["price"][1:])
+        pos = None
+        if x["symbol"] in positions_map:
+            pos = positions_map[x["symbol"]]
+            if pos.is_closed():
+                pos = None
+
+        if pos is None:
+            pos = Position(strategy=Strategy.CUSTOM, legs=[])
+            positions_map[x['symbol']] = pos
+            positions.append(pos)
+
         leg = Leg(
-            symbol=x["underlying"],
-            expiration=exp,
-            quantity=quantity,
-            open_price=open_price,
-            close_price=None,
-            lines=[CSVLine.init_from_transaction(x)],
+            symbol=x["symbol"],
+            lines=[CSVLine.init_from_transaction(x)]
         )
-        pos = Position(strategy=Strategy.CUSTOM, legs=[leg])
-        positions.append(pos)
+
+        pos.add_leg(leg)
 
     return positions
