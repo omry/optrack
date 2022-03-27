@@ -18,7 +18,7 @@ class Action(Enum):
 class CSVLine:
     # Transaction date
     str_date: str  # as string
-    date: date  # as date
+    date: datetime  # as date
 
     # Transaction type
     action: Action
@@ -41,6 +41,21 @@ class CSVLine:
     # Total cost/proceeds
     amount: Decimal
 
+    @classmethod
+    def init_from_transaction(cls, param):
+        return CSVLine(
+            str_date=param["date"].strftime("%m/%d/%Y"),
+            date=param["date"],
+            action=Action[param["action"]],
+            symbol=param["symbol"],
+            desc=param["desc"],
+            quantity=param["quantity"],
+            price=Decimal(param["price"][1:]),
+            fees=Decimal(param["fees"][1:]),
+            amount=Decimal(param["amount"][1:]),
+        )
+
+    # TODO:change to classmethod
     @staticmethod
     def init_from_str_array(line: List[str]) -> "CSVLine":
         date = datetime.strptime(line[0], "%m/%d/%Y")
@@ -81,10 +96,10 @@ class CSVLine:
 
     def is_option(self) -> bool:
         return self.action in (
-            "Buy to Open",
-            "Buy to Close",
-            "Sell to Open",
-            "Sell to Close",
+            Action.BUY_TO_OPEN,
+            Action.BUY_TO_CLOSE,
+            Action.SELL_TO_OPEN,
+            Action.SELL_TO_CLOSE,
         )
 
     def key(self) -> str:
@@ -175,10 +190,25 @@ def get_positions(client: MongoClient) -> List[Position]:
         {
             "underlying": {"$exists": 1},
             "action": {"$in": ["BUY_TO_OPEN", "SELL_TO_OPEN"]},
+            # TODO: order by date
         }
     )
+
     positions = []
     for x in ret:
-        positions.append(Position(strategy=Strategy.CUSTOM, legs=[]))
+        exp = datetime.strptime(x["expiration"], "%m/%d/%Y").date()
+        quantity = x["quantity"] if x["action"] in ["BUY_TO_OPEN"] else -x["quantity"]
+        assert x["price"][0] == "$"
+        open_price = Decimal(x["price"][1:])
+        leg = Leg(
+            symbol=x["underlying"],
+            expiration=exp,
+            quantity=quantity,
+            open_price=open_price,
+            close_price=None,
+            lines=[CSVLine.init_from_transaction(x)],
+        )
+        pos = Position(strategy=Strategy.CUSTOM, legs=[leg])
+        positions.append(pos)
 
     return positions

@@ -57,8 +57,23 @@ def test_import_csv():
             "quantity": 1,
             "str_date": "03/17/2022",
             "symbol": "SHOP 04/22/2022 550.00 P",
+            "option_type": "PUT",
+            "underlying": "SHOP",
+            "strike": "550.00",
+            "expiration": "04/22/2022",
         }
     ]
+
+
+def test_csv_line_roundtrip():
+    file = Path(__file__).parent.absolute() / "data" / "open1.csv"
+    csv = load_csv(file)
+    client = mongomock.MongoClient()
+    import_csv(client, csv)
+    trans = client["optrack"]["transactions"]
+    ret = list(trans.find({}))
+    assert len(ret) == 1
+    assert CSVLine.init_from_transaction(ret[0]) == csv[0]
 
 
 def test_empty():
@@ -80,10 +95,11 @@ def test_open1():
         legs=[
             Leg(
                 symbol="SHOP",
-                expiration=date.strptime("04/22/2022", "%m/%d/%Y"),
-                quantity=1,
+                expiration=date(2022, 4, 22),
+                quantity=-1,
                 open_price=Decimal("21.07"),
                 close_price=None,
+                lines=[csv[0]],
             )
         ],
     )
