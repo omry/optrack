@@ -55,9 +55,8 @@ class CSVLine:
             amount=Decimal(param["amount"][1:]),
         )
 
-    # TODO:change to classmethod
-    @staticmethod
-    def init_from_str_array(line: List[str]) -> "CSVLine":
+    @classmethod
+    def init_from_str_array(cls, line: List[str]) -> "CSVLine":
         date = datetime.strptime(line[0], "%m/%d/%Y")
         actions = {
             "Buy to Open": Action.BUY_TO_OPEN,
