@@ -18,7 +18,7 @@ def lint(session: nox.Session):
 
 
 @nox.session
-def tests(session):
+def test(session):
     session.install("-r", "dev-requirements.txt")
     session.install("-e", ".")
 
