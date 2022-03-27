@@ -3,6 +3,7 @@
   <component name="ChangeListManager">
     <list default="true" id="cc059b59-f060-48df-af00-86bc7f6ea150" name="Changes" comment="">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/noxfile.py" beforeDir="false" afterPath="$PROJECT_DIR$/noxfile.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/optrack/optrack.py" beforeDir="false" afterPath="$PROJECT_DIR$/optrack/optrack.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/tests/test_import.py" beforeDir="false" afterPath="$PROJECT_DIR$/tests/test_import.py" afterDir="false" />
     </list>
@@ -50,7 +51,35 @@
       <recent name="C:\Users\omry\PycharmProjects\optrack\optrack" />
     </key>
   </component>
-  <component name="RunManager" selected="Python tests.Python tests for test_import.test_import_csv">
+  <component name="RunManager" selected="Python tests.Python tests in test_import.py">
+    <configuration name="Python tests for noxfile.tests" type="tests" factoryName="Autodetect" temporary="true" nameIsGenerated="true">
+      <module name="optrack" />
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="PARENT_ENVS" value="true" />
+      <option name="SDK_HOME" value="" />
+      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$" />
+      <option name="IS_MODULE_SDK" value="true" />
+      <option name="ADD_CONTENT_ROOTS" value="true" />
+      <option name="ADD_SOURCE_ROOTS" value="true" />
+      <option name="_new_additionalArguments" value="&quot;&quot;" />
+      <option name="_new_target" value="&quot;noxfile.tests&quot;" />
+      <option name="_new_targetType" value="&quot;PYTHON&quot;" />
+      <method v="2" />
+    </configuration>
+    <configuration name="Python tests for test_import.test_csv_line_roundtrip" type="tests" factoryName="Autodetect" temporary="true" nameIsGenerated="true">
+      <module name="optrack" />
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="PARENT_ENVS" value="true" />
+      <option name="SDK_HOME" value="" />
+      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/tests" />
+      <option name="IS_MODULE_SDK" value="true" />
+      <option name="ADD_CONTENT_ROOTS" value="true" />
+      <option name="ADD_SOURCE_ROOTS" value="true" />
+      <option name="_new_additionalArguments" value="&quot;&quot;" />
+      <option name="_new_target" value="&quot;test_import.test_csv_line_roundtrip&quot;" />
+      <option name="_new_targetType" value="&quot;PYTHON&quot;" />
+      <method v="2" />
+    </configuration>
     <configuration name="Python tests for test_import.test_import_csv" type="tests" factoryName="Autodetect" temporary="true" nameIsGenerated="true">
       <module name="optrack" />
       <option name="INTERPRETER_OPTIONS" value="" />
@@ -62,20 +91,6 @@
       <option name="ADD_SOURCE_ROOTS" value="true" />
       <option name="_new_additionalArguments" value="&quot;&quot;" />
       <option name="_new_target" value="&quot;test_import.test_import_csv&quot;" />
-      <option name="_new_targetType" value="&quot;PYTHON&quot;" />
-      <method v="2" />
-    </configuration>
-    <configuration name="Python tests for test_import.test_load_csv" type="tests" factoryName="Autodetect" temporary="true" nameIsGenerated="true">
-      <module name="optrack" />
-      <option name="INTERPRETER_OPTIONS" value="" />
-      <option name="PARENT_ENVS" value="true" />
-      <option name="SDK_HOME" value="" />
-      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/tests" />
-      <option name="IS_MODULE_SDK" value="true" />
-      <option name="ADD_CONTENT_ROOTS" value="true" />
-      <option name="ADD_SOURCE_ROOTS" value="true" />
-      <option name="_new_additionalArguments" value="&quot;&quot;" />
-      <option name="_new_target" value="&quot;test_import.test_load_csv&quot;" />
       <option name="_new_targetType" value="&quot;PYTHON&quot;" />
       <method v="2" />
     </configuration>
@@ -109,10 +124,11 @@
     </configuration>
     <recent_temporary>
       <list>
-        <item itemvalue="Python tests.Python tests for test_import.test_import_csv" />
         <item itemvalue="Python tests.Python tests in test_import.py" />
-        <item itemvalue="Python tests.Python tests for test_import.test_load_csv" />
+        <item itemvalue="Python tests.Python tests for test_import.test_csv_line_roundtrip" />
+        <item itemvalue="Python tests.Python tests for test_import.test_import_csv" />
         <item itemvalue="Python tests.Python tests for test_import.test_open1" />
+        <item itemvalue="Python tests.Python tests for noxfile.tests" />
       </list>
     </recent_temporary>
   </component>
@@ -139,6 +155,20 @@
     </option>
   </component>
   <component name="XDebuggerManager">
+    <breakpoint-manager>
+      <breakpoints>
+        <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
+          <url>file://$PROJECT_DIR$/optrack/optrack.py</url>
+          <line>197</line>
+          <option name="timeStamp" value="10" />
+        </line-breakpoint>
+        <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
+          <url>file://$PROJECT_DIR$/tests/test_import.py</url>
+          <line>87</line>
+          <option name="timeStamp" value="12" />
+        </line-breakpoint>
+      </breakpoints>
+    </breakpoint-manager>
     <watches-manager>
       <configuration name="tests">
         <watch expression="client" />
