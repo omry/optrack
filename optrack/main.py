@@ -13,11 +13,11 @@ log = getLogger(__name__)
 def main(cfg: DictConfig) -> None:
     client = MongoClient(cfg.db.url)
     if cfg.action == "import":
-        log.info("Importing")
+        log.info(f"Importing {cfg.input.file}")
         lines = options.load_csv(cfg.input.file)
         options.import_csv(client, lines)
     elif cfg.action == "list":
-        log.info("Listing")
+        log.info("Listing positions")
         positions = options.get_positions(client)
         for pos in positions:
             print(pos)

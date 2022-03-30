@@ -103,6 +103,7 @@ def test_open1():
         ],
     )
 
+
 def test_open1_two_transactions():
     client = mongomock.MongoClient()
     file = Path(__file__).parent.absolute() / "data" / "open1_two_transactions.csv"

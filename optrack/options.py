@@ -6,12 +6,97 @@ from typing import List, Optional, Any
 
 from pymongo import MongoClient
 
+from logging import getLogger
+
+logger = getLogger(__name__)
+
+
+def parse_price(s: str) -> Decimal:
+    if len(s) == 0:
+        return Decimal(0)
+    sign = 1
+    if s[0] == "-":
+        sign = -1
+        s = s[1:]
+
+    assert s[0] == "$", f"Price does not start with $: {s}"
+    return Decimal(s[1:]) * sign
+
 
 class Action(Enum):
     BUY_TO_OPEN = 0
     BUY_TO_CLOSE = 1
     SELL_TO_CLOSE = 2
     SELL_TO_OPEN = 3
+    BUY = 4
+    SELL = 5
+    JOURNALED_SHARES = 6
+    JOURNAL = 7
+    NRA_TAX_ADJ = 8
+    CASH_DIVIDEND = 9
+    QUALIFIED_DIVIDEND = 10
+    NON_QUALIFIED_DIV = 11
+    CREDIT_INTEREST = 12
+    WIRE_FUNDS = 13
+    MISC_CASH_ENTRY = 14
+    SERVICE_FEE = 15
+    MONEYLINK_TRANSFER = 16
+    MONEYLINK_DEPOSIT = 17
+    MONEYLINK_ADJ = 18
+    STOCK_PLAN_ACTIVITY = 19
+    REINVEST_SHARES = 20
+    QUAL_DIV_REINVEST = 21
+    REINVEST_DIVIDEND = 22
+    FOREIGN_TAX_PAID = 23
+    EXPIRED = 24
+    MANDATORY_REORG_EXC = 25
+    SPIN_OFF = 26
+    FUNDS_RECEIVED = 27
+    CASH_IN_LIEU = 28
+    STOCK_SPLIT = (29,)
+    CASH_STOCK_MERGER = (30,)
+
+    @staticmethod
+    def from_string(s: str) -> "Action":
+        actions = {
+            "Buy to Open": Action.BUY_TO_OPEN,
+            "Buy to Close": Action.BUY_TO_CLOSE,
+            "Sell to Open": Action.SELL_TO_OPEN,
+            "Sell to Close": Action.SELL_TO_CLOSE,
+            "Buy": Action.BUY,
+            "Sell": Action.SELL,
+            "Journaled Shares": Action.JOURNALED_SHARES,
+            "NRA Tax Adj": Action.NRA_TAX_ADJ,
+            "Qualified Dividend": Action.QUALIFIED_DIVIDEND,
+            "Non-Qualified Div": Action.NON_QUALIFIED_DIV,
+            "Reinvest Shares": Action.REINVEST_SHARES,
+            "Qual Div Reinvest": Action.QUAL_DIV_REINVEST,
+            "Journal": Action.JOURNAL,
+            "Credit Interest": Action.CREDIT_INTEREST,
+            "Wire Funds": Action.WIRE_FUNDS,
+            "Misc Cash Entry": Action.MISC_CASH_ENTRY,
+            "Service Fee": Action.SERVICE_FEE,
+            "MoneyLink Deposit": Action.MONEYLINK_DEPOSIT,
+            "MoneyLink Transfer": Action.MONEYLINK_TRANSFER,
+            "MoneyLink Adj": Action.MONEYLINK_ADJ,
+            "Stock Plan Activity": Action.STOCK_PLAN_ACTIVITY,
+            "Foreign Tax Paid": Action.FOREIGN_TAX_PAID,
+            "Expired": Action.EXPIRED,
+            "Mandatory Reorg Exc": Action.MANDATORY_REORG_EXC,
+            "Spin-off": Action.SPIN_OFF,
+            "Funds Received": Action.FUNDS_RECEIVED,
+            "Cash Dividend": Action.CASH_DIVIDEND,
+            "Cash In Lieu": Action.CASH_IN_LIEU,
+            "Reinvest Dividend": Action.REINVEST_DIVIDEND,
+            "Stock Split": Action.STOCK_SPLIT,
+            "Cash/Stock Merger": Action.CASH_STOCK_MERGER,
+        }
+        try:
+            return actions[s]
+        except KeyError:
+            raise ValueError(
+                f"Unsupported action '{s}', supported one of {list(actions.keys())}"
+            )
 
 
 @dataclass(frozen=True)
@@ -29,8 +114,8 @@ class CSVLine:
     # Transaction description
     desc: str
 
-    # #stocks or #contracts
-    quantity: int
+    # #stocks or #contracts if applicable
+    quantity: Optional[float]
 
     # Transaction price/proceeds (per stock/option contract)
     price: Decimal
@@ -57,29 +142,18 @@ class CSVLine:
 
     @classmethod
     def init_from_str_array(cls, line: List[str]) -> "CSVLine":
-        date = datetime.strptime(line[0], "%m/%d/%Y")
-        actions = {
-            "Buy to Open": Action.BUY_TO_OPEN,
-            "Buy to Close": Action.BUY_TO_CLOSE,
-            "Sell to Open": Action.SELL_TO_OPEN,
-            "Sell to Close": Action.SELL_TO_CLOSE,
-        }
+        if "as of" in line[0]:
+            line[0] = line[0].split("as of ")[1]
 
-        try:
-            action = actions[line[1]]
-        except KeyError:
-            raise ValueError(
-                f"Unsupported action {line[1]}, supported one of {actions.keys()}"
-            )
+        date = datetime.strptime(line[0], "%m/%d/%Y")
+        action = Action.from_string(line[1])
         symbol = line[2]
         desc = line[3]
-        quantity = int(line[4])
-        assert line[5][0] == "$"
-        price = Decimal(line[5][1:])
-        assert line[6][0] == "$"
-        fees = Decimal(line[6][1:])
-        assert line[7][0] == "$"
-        amount = Decimal(line[7][1:])
+        quantity = float(line[4]) if len(line[4]) > 0 else None
+
+        price = parse_price(line[5])
+        fees = parse_price(line[6])
+        amount = parse_price(line[7])
 
         return CSVLine(
             str_date=line[0],
@@ -139,7 +213,7 @@ class Leg:
             if cl.action in [Action.SELL_TO_CLOSE, Action.BUY_TO_CLOSE]:
                 closes.append((cl.price, cl.quantity))
 
-        def wavg(lst : Any) -> Decimal:
+        def wavg(lst: Any) -> Decimal:
             s = 0
             t = 0
             for a in lst:
@@ -163,6 +237,7 @@ class Leg:
 
     def is_closed(self) -> bool:
         return self.quantity == 0
+
 
 @dataclass
 class Position:
@@ -188,18 +263,31 @@ class Position:
         found_leg.finalize()
 
 
-def load_csv(file: str) -> List[CSVLine]:
+def load_csv(filename: str) -> List[CSVLine]:
     import csv
 
     lines = []
-    with open(file, "r") as file:
+    with open(filename, "r") as file:
         reader = csv.reader(file)
-        next(reader)  # skip header
+        lnum = 1
         for row in reader:
-            row = row[0:8]  # Schwab has a trailing comma, strip the last empty item
-
-            cl = CSVLine.init_from_str_array(row)
-            lines.append(cl)
+            try:
+                if len(row) == 1:
+                    continue  # skip title header
+                row = row[0:8]  # Schwab has a trailing comma, strip the last empty item
+                if all(map(lambda l: not str.isnumeric(l), row)) and lnum < 3:
+                    continue  # skip header
+                if row[0] == "Transactions Total":
+                    continue  # skip footer
+                cl = CSVLine.init_from_str_array(row)
+                lines.append(cl)
+            except ValueError as e:
+                logger.error(f"{filename} ## {lnum}: {type(e).__name__} : {e}")
+            except AssertionError as e:
+                logger.error(f"AssertionError importing line {lnum} from {filename}")
+                raise
+            finally:
+                lnum = lnum + 1
 
     return lines
 
@@ -207,6 +295,17 @@ def load_csv(file: str) -> List[CSVLine]:
 def import_csv(client: MongoClient, lines: List[CSVLine]) -> None:
     trans = client["optrack"]["transactions"]
     for line in lines:
+        if line.action not in (
+            Action.BUY_TO_OPEN,
+            Action.BUY_TO_CLOSE,
+            Action.SELL_TO_OPEN,
+            Action.SELL_TO_CLOSE,
+            Action.EXPIRED,
+            Action.BUY,
+            Action.SELL,
+        ):
+            continue
+
         now = datetime.utcnow()
         insert = asdict(line)
         insert["insertion_date"] = now
@@ -244,7 +343,6 @@ def get_positions(client: MongoClient) -> List[Position]:
         }
     )
 
-
     positions_map = {}
     positions = []
     for x in ret:
@@ -257,13 +355,10 @@ def get_positions(client: MongoClient) -> List[Position]:
 
         if pos is None:
             pos = Position(strategy=Strategy.CUSTOM, legs=[])
-            positions_map[x['symbol']] = pos
+            positions_map[x["symbol"]] = pos
             positions.append(pos)
 
-        leg = Leg(
-            symbol=x["symbol"],
-            lines=[CSVLine.init_from_transaction(x)]
-        )
+        leg = Leg(symbol=x["symbol"], lines=[CSVLine.init_from_transaction(x)])
 
         pos.add_leg(leg)
 
