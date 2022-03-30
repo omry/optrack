@@ -1,8 +1,14 @@
 ## OpTrack
+Options trading tracker
+Supported platforms (CSV Import):
+- Schwab
 
-TODO
+## Installation and usage
+Install in development mode + dependencies: `pip install -e .`
 
-## Linting
+## Build automation
+Optrack uses `nox` for build/test automation.
+- `nox -s test`: Run tests. You can also run tests directly with pytest if optrack is installed
 - `nox -s lint`: Lint the code, fail on error.
 - `FIX=1 nox -s lint`: Lint the code, attempt to fix errors automatically.
 

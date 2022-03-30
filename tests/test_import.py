@@ -4,7 +4,7 @@ from pathlib import Path
 
 import mongomock
 
-from optrack.optrack import (
+from optrack.options import (
     Leg,
     Position,
     Strategy,
