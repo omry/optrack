@@ -20,7 +20,9 @@ def main(cfg: DictConfig) -> None:
         log.info("Listing positions")
         positions = options.get_positions(client)
         for pos in positions:
-            print(pos)
+            print(f"Position: {pos.strategy}")
+            for leg in pos.legs:
+                print(f"\t{leg.symbol}, contracts={leg.quantity_sum()} open={leg.open_price_avg()}, close={leg.close_price_avg()}")
 
 
 if __name__ == "__main__":

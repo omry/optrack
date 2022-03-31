@@ -2,7 +2,9 @@ from dataclasses import asdict, dataclass, field
 from datetime import date, datetime
 from decimal import Decimal
 from enum import Enum
-from typing import List, Optional, Any
+from numbers import Number
+from pathlib import Path
+from typing import List, Optional, Any, Tuple, Union
 
 from pymongo import MongoClient
 
@@ -21,6 +23,15 @@ def parse_price(s: str) -> Decimal:
 
     assert s[0] == "$", f"Price does not start with $: {s}"
     return Decimal(s[1:]) * sign
+
+
+def wavg(lst: Tuple[Number, Number]) -> Decimal:
+    s = 0
+    t = 0
+    for a in lst:
+        s += a[0] * a[1]
+        t += a[1]
+    return Decimal(s / t)
 
 
 class Action(Enum):
@@ -191,52 +202,37 @@ class Strategy(Enum):
 @dataclass
 class Leg:
     symbol: str
-    # number of contracts in this leg. This is the sum of opening contract lines
-    # negative value means short positions
-    quantity: Optional[int] = None
-    # average price for open
-    open_price: Optional[Decimal] = None
-    # average price for close
-    close_price: Optional[Decimal] = None
 
     # A leg can have multiple transactions of the same type.
     # e.g. multiple transaction opening (selling 2 contracts in two transactions).
     lines: List[CSVLine] = field(default_factory=lambda: list())
 
-    # update all computed fields
-    def finalize(self) -> None:
-        opens = []
-        closes = []
-        for cl in self.lines:
-            if cl.action in [Action.SELL_TO_OPEN, Action.BUY_TO_OPEN]:
-                opens.append((cl.price, cl.quantity))
-            if cl.action in [Action.SELL_TO_CLOSE, Action.BUY_TO_CLOSE]:
-                closes.append((cl.price, cl.quantity))
-
-        def wavg(lst: Any) -> Decimal:
-            s = 0
-            t = 0
-            for a in lst:
-                s += a[0] * a[1]
-                t += a[1]
-            return Decimal(s / t)
-
-        if len(opens) > 0:
-            self.open_price = wavg(opens)
-        if len(closes) > 0:
-            self.close_price = wavg(closes)
-
-        quantity = 0
+    def quantity_sum(self) -> Decimal:
+        quantity = Decimal(0)
         for cl in self.lines:
             if cl.action in [Action.BUY_TO_OPEN, Action.BUY_TO_CLOSE]:
                 quantity += cl.quantity
             if cl.action in [Action.SELL_TO_OPEN, Action.SELL_TO_CLOSE]:
                 quantity -= cl.quantity
 
-        self.quantity = quantity
+        return quantity
+
+    def open_price_avg(self) -> Optional[Decimal]:
+        opens = []
+        for cl in self.lines:
+            if cl.action in [Action.SELL_TO_OPEN, Action.BUY_TO_OPEN]:
+                opens.append((cl.price, cl.quantity))
+        return wavg(opens) if len(opens) > 0 else None
+
+    def close_price_avg(self) -> Optional[Decimal]:
+        close = []
+        for cl in self.lines:
+            if cl.action in [Action.SELL_TO_CLOSE, Action.BUY_TO_CLOSE]:
+                close.append((cl.price, cl.quantity))
+        return wavg(close) if len(close) > 0 else None
 
     def is_closed(self) -> bool:
-        return self.quantity == 0
+        return self.quantity_sum() == 0
 
 
 @dataclass
@@ -255,15 +251,12 @@ class Position:
                 break
         if found_leg is None:
             self.legs.append(leg)
-            found_leg = leg
         else:
             for cl in leg.lines:
                 found_leg.lines.append(cl)
 
-        found_leg.finalize()
 
-
-def load_csv(filename: str) -> List[CSVLine]:
+def load_csv(filename: Union[Path, str]) -> List[CSVLine]:
     import csv
 
     lines = []
@@ -339,7 +332,14 @@ def get_positions(client: MongoClient) -> List[Position]:
     ret = trans.find(
         {
             "underlying": {"$exists": 1},
-            "action": {"$in": ["BUY_TO_OPEN", "SELL_TO_OPEN"]},
+            "action": {
+                "$in": [
+                    "BUY_TO_OPEN",
+                    "SELL_TO_OPEN",
+                    "BUY_TO_CLOSE",
+                    "SELL_TO_CLOSE",
+                ]
+            },
             # TODO: order by date
         }
     )
@@ -347,7 +347,6 @@ def get_positions(client: MongoClient) -> List[Position]:
     positions_map = {}
     positions = []
     for x in ret:
-        assert x["price"][0] == "$"
         pos = None
         if x["symbol"] in positions_map:
             pos = positions_map[x["symbol"]]
@@ -355,6 +354,8 @@ def get_positions(client: MongoClient) -> List[Position]:
                 pos = None
 
         if pos is None:
+            # new position
+            # assert x["action"] in ["BUY_TO_OPEN", "SELL_TO_OPEN"]
             pos = Position(strategy=Strategy.CUSTOM, legs=[])
             positions_map[x["symbol"]] = pos
             positions.append(pos)

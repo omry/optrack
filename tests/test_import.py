@@ -92,16 +92,12 @@ def test_open1():
     assert len(pos) == 1
     assert pos[0] == Position(
         Strategy.CUSTOM,
-        legs=[
-            Leg(
-                symbol="SHOP 04/22/2022 550.00 P",
-                quantity=-1,
-                open_price=Decimal("21.07"),
-                close_price=None,
-                lines=[csv[0]],
-            )
-        ],
+        legs=[Leg(symbol="SHOP 04/22/2022 550.00 P", lines=[csv[0]])],
     )
+    leg = pos[0].legs[0]
+    assert leg.quantity_sum() == -1
+    assert leg.open_price_avg() == Decimal("21.07")
+    assert leg.close_price_avg() is None
 
 
 def test_open1_two_transactions():
@@ -118,10 +114,35 @@ def test_open1_two_transactions():
         legs=[
             Leg(
                 symbol="SHOP 04/22/2022 550.00 P",
-                quantity=-5,
-                open_price=Decimal("21.60"),
-                close_price=None,
                 lines=[csv[0], csv[1]],
             ),
         ],
     )
+    leg = pos[0].legs[0]
+    assert leg.quantity_sum() == -5
+    assert leg.open_price_avg() == Decimal("21.60")
+    assert leg.close_price_avg() is None
+
+
+def test_open_close1():
+    client = mongomock.MongoClient()
+    file = Path(__file__).parent.absolute() / "data" / "open_close1.csv"
+    csv = load_csv(file)
+    import_csv(client, csv)
+
+    pos = get_positions(client)
+
+    assert len(pos) == 1
+    assert pos[0] == Position(
+        Strategy.CUSTOM,
+        legs=[
+            Leg(
+                symbol="NVDA 04/01/2022 300.00 C",
+                lines=[csv[0], csv[1]],
+            ),
+        ],
+    )
+    leg = pos[0].legs[0]
+    assert leg.quantity_sum() == 0
+    assert leg.open_price_avg() == Decimal("8.22")
+    assert leg.close_price_avg() == Decimal("4.00")
