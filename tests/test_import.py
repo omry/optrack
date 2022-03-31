@@ -54,7 +54,7 @@ def test_import_csv():
             "desc": "PUT SHOPIFY INC $550 EXP 04/22/22",
             "fees": "$0.66",
             "price": "$21.07",
-            "quantity": 1,
+            "quantity": "1",
             "str_date": "03/17/2022",
             "symbol": "SHOP 04/22/2022 550.00 P",
             "option_type": "PUT",

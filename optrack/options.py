@@ -114,8 +114,8 @@ class CSVLine:
     # Transaction description
     desc: str
 
-    # #stocks or #contracts if applicable
-    quantity: Optional[float]
+    # stocks or #contracts if applicable. Can be fractional for stocks
+    quantity: Optional[Decimal]
 
     # Transaction price/proceeds (per stock/option contract)
     price: Decimal
@@ -134,7 +134,7 @@ class CSVLine:
             action=Action[param["action"]],
             symbol=param["symbol"],
             desc=param["desc"],
-            quantity=param["quantity"],
+            quantity=Decimal(param["quantity"]),
             price=Decimal(param["price"][1:]),
             fees=Decimal(param["fees"][1:]),
             amount=Decimal(param["amount"][1:]),
@@ -149,7 +149,7 @@ class CSVLine:
         action = Action.from_string(line[1])
         symbol = line[2]
         desc = line[3]
-        quantity = float(line[4]) if len(line[4]) > 0 else None
+        quantity = Decimal(line[4]) if len(line[4]) > 0 else None
 
         price = parse_price(line[5])
         fees = parse_price(line[6])
@@ -313,6 +313,7 @@ def import_csv(client: MongoClient, lines: List[CSVLine]) -> None:
         insert["fees"] = f"${insert['fees']}"
         insert["price"] = f"${insert['price']}"
         insert["amount"] = f"${insert['amount']}"
+        insert["quantity"] = f"{insert['quantity']}"
         if line.is_option():
             tokens = line.symbol.split(" ")
             insert["underlying"] = tokens[0]
