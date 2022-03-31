@@ -1,7 +1,7 @@
 from datetime import date, datetime
 from decimal import Decimal
 from pathlib import Path
-
+from pytest import mark
 import mongomock
 
 from optrack.options import (
@@ -47,7 +47,7 @@ def test_import_csv():
     del ret[0]["last_update_date"]
     assert list(ret) == [
         {
-            "_id": "2022-03-17 00:00:00:3_#1_SHOP 04/22/2022 550.00 P@21.07",
+            "_id": "2022-03-17 00:00:00:3##1_SHOP 04/22/2022 550.00 P@21.07",
             "action": "SELL_TO_OPEN",
             "amount": "$2106.34",
             "date": datetime(2022, 3, 17, 0, 0),
@@ -61,6 +61,53 @@ def test_import_csv():
             "underlying": "SHOP",
             "strike": "550.00",
             "expiration": "04/22/2022",
+        }
+    ]
+
+def test_import_csv2():
+    file = Path(__file__).parent.absolute() / "data" / "open2.csv"
+    csv = load_csv(file)
+
+    client = mongomock.MongoClient()
+    import_csv(client, csv)
+    trans = client["optrack"]["transactions"]
+    ret = list(trans.find({}))
+    assert len(ret) == 2
+    for r in ret:
+        del r["insertion_date"]
+        del r["last_update_date"]
+    assert list(ret) == [
+        {
+            "_id": "2022-02-14 00:00:01:1##1_PRU 03/18/2022 110.00 P@2.54",
+            "action": "BUY_TO_CLOSE",
+            "amount": "-$20",
+            "date": datetime(2022, 2, 14, 0, 0, 1),
+            "desc": "PUT PRUDENTIAL FINL $110 EXP 03/18/22",
+            "fees": "$1",
+            "price": "$2.54",
+            "quantity": "1",
+            "str_date": "02/14/2022",
+            "symbol": "PRU 03/18/2022 110.00 P",
+            "option_type": "PUT",
+            "underlying": "PRU",
+            "strike": "110.00",
+            "expiration": "03/18/2022",
+        },
+        {
+            "_id": "2022-02-14 00:00:00:1##1_PRU 03/18/2022 110.00 P@2.54",
+            "action": "BUY_TO_CLOSE",
+            "amount": "-$20",
+            "date": datetime(2022, 2, 14, 0, 0, 0),
+            "desc": "PUT PRUDENTIAL FINL $110 EXP 03/18/22",
+            "fees": "$1",
+            "price": "$2.54",
+            "quantity": "1",
+            "str_date": "02/14/2022",
+            "symbol": "PRU 03/18/2022 110.00 P",
+            "option_type": "PUT",
+            "underlying": "PRU",
+            "strike": "110.00",
+            "expiration": "03/18/2022",
         }
     ]
 
@@ -124,9 +171,10 @@ def test_open1_two_transactions():
     assert leg.close_price_avg() is None
 
 
-def test_open_close1():
+@mark.parametrize("fname", ["open_close1.csv", "open_close1_rev.csv"])
+def test_open_close1(fname: str):
     client = mongomock.MongoClient()
-    file = Path(__file__).parent.absolute() / "data" / "open_close1.csv"
+    file = Path(__file__).parent.absolute() / "data" / fname
     csv = load_csv(file)
     import_csv(client, csv)
 
@@ -146,3 +194,29 @@ def test_open_close1():
     assert leg.quantity_sum() == 0
     assert leg.open_price_avg() == Decimal("8.22")
     assert leg.close_price_avg() == Decimal("4.00")
+
+
+def test_open_close2():
+    client = mongomock.MongoClient()
+    file = Path(__file__).parent.absolute() / "data" / "open_close2.csv"
+    csv = load_csv(file)
+    import_csv(client, csv)
+
+    pos = get_positions(client)
+
+    assert len(pos) == 1
+    assert len(pos[0].legs) == 1
+    assert len(pos[0].legs[0].lines) == 3
+    assert pos[0] == Position(
+        Strategy.CUSTOM,
+        legs=[
+            Leg(
+                symbol="PRU 03/18/2022 100.00 P",
+                lines=[csv[0], csv[1], csv[2]],
+            ),
+        ],
+    )
+    leg = pos[0].legs[0]
+    assert leg.quantity_sum() == 0
+    assert leg.open_price_avg() == Decimal("2")
+    assert leg.close_price_avg() == Decimal("1")

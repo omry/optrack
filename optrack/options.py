@@ -1,10 +1,10 @@
 from dataclasses import asdict, dataclass, field
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 from enum import Enum
 from numbers import Number
 from pathlib import Path
-from typing import List, Optional, Any, Tuple, Union
+from typing import List, Optional, Any, Tuple, Union, Dict
 
 from pymongo import MongoClient
 
@@ -23,6 +23,14 @@ def parse_price(s: str) -> Decimal:
 
     assert s[0] == "$", f"Price does not start with $: {s}"
     return Decimal(s[1:]) * sign
+
+
+def format_price(p: Number) -> str:
+    neg = False
+    if p < 0:
+        neg = True
+        p = p * -1
+    return f"{'-' if neg else ''}${p}"
 
 
 def wavg(lst: Tuple[Number, Number]) -> Decimal:
@@ -110,10 +118,10 @@ class Action(Enum):
             )
 
 
-@dataclass(frozen=True)
+@dataclass
 class CSVLine:
     # Transaction date
-    str_date: str  # as string
+    str_date: str  # as string # TODO: remove?
     date: datetime  # as date
 
     # Transaction type
@@ -146,9 +154,9 @@ class CSVLine:
             symbol=param["symbol"],
             desc=param["desc"],
             quantity=Decimal(param["quantity"]),
-            price=Decimal(param["price"][1:]),
-            fees=Decimal(param["fees"][1:]),
-            amount=Decimal(param["amount"][1:]),
+            price=parse_price(param["price"]),
+            fees=parse_price(param["fees"]),
+            amount=parse_price(param["amount"]),
         )
 
     @classmethod
@@ -187,7 +195,7 @@ class CSVLine:
         )
 
     def key(self) -> str:
-        return f"{self.date}:{self.action.value}_#{self.quantity}_{self.symbol}@{self.price}"
+        return f"{self.date}:{self.action.value}##{self.quantity}_{self.symbol}@{self.price}"
 
 
 class Strategy(Enum):
@@ -265,6 +273,8 @@ def load_csv(filename: Union[Path, str]) -> List[CSVLine]:
         lnum = 1
         for row in reader:
             try:
+                if len(row) == 0:  # skip empty lines
+                    continue
                 if len(row) == 1:
                     continue  # skip title header
                 row = row[0:8]  # Schwab has a trailing comma, strip the last empty item
@@ -281,6 +291,19 @@ def load_csv(filename: Union[Path, str]) -> List[CSVLine]:
                 raise
             finally:
                 lnum = lnum + 1
+
+    day_to_transactions: Dict[date, List[CSVLine]] = {}
+    for cl in lines:
+        k = cl.date.date()
+        if k not in day_to_transactions:
+            day_to_transactions[k] = []
+        day_to_transactions[k].append(cl)
+
+    for day, txs in day_to_transactions.items():
+        second = 0
+        for tx in reversed(txs):
+            tx.date = tx.date + timedelta(seconds=second)
+            second = second + 1
 
     return lines
 
@@ -303,9 +326,9 @@ def import_csv(client: MongoClient, lines: List[CSVLine]) -> None:
         insert = asdict(line)
         insert["insertion_date"] = now
         insert["action"] = insert["action"].name
-        insert["fees"] = f"${insert['fees']}"
-        insert["price"] = f"${insert['price']}"
-        insert["amount"] = f"${insert['amount']}"
+        insert["fees"] = format_price(insert['fees'])
+        insert["price"] = format_price(insert['price'])
+        insert["amount"] = format_price(insert['amount'])
         insert["quantity"] = f"{insert['quantity']}"
         if line.is_option():
             tokens = line.symbol.split(" ")
