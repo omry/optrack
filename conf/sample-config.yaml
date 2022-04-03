@@ -3,7 +3,7 @@ defaults:
   - _self_
 
 input:
-  file: Personal_account_Transactions_20220318-025052.CSV
+  file: schwab-transactions-dump.csv
 
 db:
   url: mongodb://localhost:27017
