@@ -32,6 +32,7 @@ filter:
   underlying: null
   range:
     start: null
+    end: null
 ```
 
 #### Import transactions file
