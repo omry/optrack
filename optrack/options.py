@@ -4,13 +4,28 @@ from decimal import Decimal
 from enum import Enum
 from numbers import Number
 from pathlib import Path
-from typing import List, Optional, Any, Tuple, Union, Dict
+from typing import List, Optional, Tuple, Union, Dict
 
+import pymongo
 from pymongo import MongoClient
 
 from logging import getLogger
 
+from .config import Filter
+import builtins
+
 logger = getLogger(__name__)
+
+
+"""
+input:
+  file: Personal_account_Transactions_20220318-025052.CSV
+
+db:
+  url: mongodb://localhost:27017
+
+action: list
+"""
 
 
 def parse_price(s: str) -> Decimal:
@@ -215,6 +230,13 @@ class Leg:
     # e.g. multiple transaction opening (selling 2 contracts in two transactions).
     lines: List[CSVLine] = field(default_factory=lambda: list())
 
+    def quantity_open(self) -> Decimal:
+        quantity = Decimal(0)
+        for cl in self.lines:
+            if cl.action in [Action.BUY_TO_OPEN, Action.BUY_TO_CLOSE]:
+                quantity += cl.quantity
+        return quantity
+
     def quantity_sum(self) -> Decimal:
         quantity = Decimal(0)
         for cl in self.lines:
@@ -239,8 +261,16 @@ class Leg:
                 close.append((cl.price, cl.quantity))
         return wavg(close) if len(close) > 0 else None
 
+    def dates(self) -> List[datetime]:
+        return sorted(list(set([x.date.date() for x in self.lines])))
+
     def is_closed(self) -> bool:
         return self.quantity_sum() == 0
+
+    def underlying(self) -> str:
+        s = set([x.symbol.split(" ")[0] for x in self.lines])
+        assert len(s) == 1
+        return next(iter(s))
 
 
 @dataclass
@@ -263,13 +293,30 @@ class Position:
             for cl in leg.lines:
                 found_leg.lines.append(cl)
 
-    def symbols(self) -> str:
+    def symbols(self) -> List[str]:
         return [x.symbol for x in self.legs]
+
+    def underlying_symbols(self) -> List[str]:
+        return list(set(x.underlying() for x in self.legs))
+
+    def all_dates(self) -> List[datetime]:
+        dd = [leg.dates() for leg in self.legs]
+        res = []
+        for x in dd:
+            res.extend(x)
+        return res
+
+    def first_date(self):
+        return sorted(self.all_dates())[0]
+
+    def last_date(self):
+        return sorted(self.all_dates())[-1]
 
     def __repr__(self) -> str:
         symbols = self.symbols()
         symb = symbols if len(symbols) > 1 else symbols[0]
         legs = ""
+
         def leg_str(x: Leg) -> str:
             if x.is_closed():
                 return f"{x.symbol}: open:{x.open_price_avg()}, close:{x.close_price_avg()}"
@@ -277,16 +324,14 @@ class Position:
                 return f"{x.symbol}: open:{x.open_price_avg()}"
 
         if len(self.legs) == 0:
-            legs = 'No legs'
+            legs = "No legs"
         elif len(self.legs) == 1:
             legs = leg_str(self.legs[0])
         elif len(self.legs) > 1:
             lst = [leg_str(x) for x in self.legs]
             legs = ",".join(lst)
 
-
         return f"{symb}, {'Closed' if self.is_closed() else 'Open'}: {legs}"
-
 
 def load_csv(filename: Union[Path, str]) -> List[CSVLine]:
     import csv
@@ -374,22 +419,31 @@ def import_csv(client: MongoClient, lines: List[CSVLine]) -> None:
         )
 
 
-def get_positions(client: MongoClient) -> List[Position]:
+def get_positions(
+    client: MongoClient, filter: Optional[Filter] = None
+) -> List[Position]:
     trans = client["optrack"]["transactions"]
-    ret = trans.find(
-        {
-            "underlying": {"$exists": 1},
-            "action": {
-                "$in": [
-                    "BUY_TO_OPEN",
-                    "SELL_TO_OPEN",
-                    "BUY_TO_CLOSE",
-                    "SELL_TO_CLOSE",
-                ]
-            },
-            # TODO: order by date
-        }
-    )
+
+    query = {
+        "underlying": {"$exists": 1},
+        "action": {
+            "$in": [
+                "BUY_TO_OPEN",
+                "SELL_TO_OPEN",
+                "BUY_TO_CLOSE",
+                "SELL_TO_CLOSE",
+            ]
+        },
+    }
+
+    if filter is not None:
+        if filter.symbol is not None:
+            query["symbol"] = {"$regex": filter.symbol, "$options": "i"}
+        if filter.underlying is not None:
+            query["underlying"] = {"$regex": f"^{filter.underlying}$", "$options": "i"}
+
+    ret = trans.find(query)
+    ret.sort(key_or_list="date", direction=pymongo.ASCENDING)
 
     positions_map = {}
     positions = []
@@ -402,7 +456,7 @@ def get_positions(client: MongoClient) -> List[Position]:
 
         if pos is None:
             # new position
-            # assert x["action"] in ["BUY_TO_OPEN", "SELL_TO_OPEN"]
+            assert x["action"] in ["BUY_TO_OPEN", "SELL_TO_OPEN"], x["action"]
             pos = Position(strategy=Strategy.CUSTOM, legs=[])
             positions_map[x["symbol"]] = pos
             positions.append(pos)
@@ -411,4 +465,16 @@ def get_positions(client: MongoClient) -> List[Position]:
 
         pos.add_leg(leg)
 
-    return positions
+    input_date_format = "%m/%d/%Y"
+
+    def pred(pos_: Position) -> bool:
+        if filter is not None:
+            if filter.range.start is not None:
+                if pos_.first_date() < datetime.strptime(filter.range.start, input_date_format).date():
+                    return False
+            if filter.range.end is not None:
+                if pos_.last_date() > datetime.strptime(filter.range.end, input_date_format).date():
+                    return False
+
+        return True
+    return list(builtins.filter(pred, positions))

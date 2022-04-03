@@ -1,3 +1,7 @@
+defaults:
+  - optrack/schema@_here_
+  - _self_
+
 input:
   file: Personal_account_Transactions_20220318-025052.CSV
 

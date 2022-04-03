@@ -4,6 +4,7 @@ from pathlib import Path
 from pytest import mark
 import mongomock
 
+from optrack.config import Filter, Range
 from optrack.options import (
     Leg,
     Position,
@@ -162,7 +163,7 @@ def test_open1_two_transactions():
         legs=[
             Leg(
                 symbol="SHOP 04/22/2022 550.00 P",
-                lines=[csv[0], csv[1]],
+                lines=[csv[1], csv[0]],
             ),
         ],
     )
@@ -172,7 +173,7 @@ def test_open1_two_transactions():
     assert leg.close_price_avg() is None
 
 
-@mark.parametrize("fname", ["open_close1.csv", "open_close1_rev.csv"])
+@mark.parametrize("fname", ["open_close1.csv"])
 def test_open_close1(fname: str):
     client = mongomock.MongoClient()
     file = Path(__file__).parent.absolute() / "data" / fname
@@ -213,7 +214,7 @@ def test_open_close2():
         legs=[
             Leg(
                 symbol="PRU 03/18/2022 100.00 P",
-                lines=[csv[0], csv[1], csv[2]],
+                lines=[csv[2], csv[1], csv[0]],
             ),
         ],
     )
@@ -236,7 +237,7 @@ def test_open_close3():
         Position(
             Strategy.CUSTOM,
             legs=[
-                Leg(symbol="PRU 03/18/2022 100.00 P", lines=[csv[0], csv[2]]),
+                Leg(symbol="PRU 03/18/2022 100.00 P", lines=[csv[2], csv[0]]),
             ],
         ),
         Position(
@@ -267,7 +268,10 @@ def test_open_close4():
         Position(
             Strategy.CUSTOM,
             legs=[
-                Leg(symbol="PRU 03/18/2022 100.00 P", lines=[csv[0], csv[1], csv[2], csv[3], csv[5]]),
+                Leg(
+                    symbol="PRU 03/18/2022 100.00 P",
+                    lines=[csv[5], csv[3], csv[2], csv[1], csv[0]],
+                ),
             ],
         ),
         Position(
@@ -283,3 +287,51 @@ def test_open_close4():
     assert pos[0].legs[0].close_price_avg() == Decimal("0.762")
     assert pos[1].legs[0].open_price_avg() == Decimal("1.61")
     assert pos[1].legs[0].close_price_avg() is None
+
+
+def test_filter_symbol_regex() -> None:
+    client = mongomock.MongoClient()
+    file = Path(__file__).parent.absolute() / "data" / "open_close4.csv"
+    csv = load_csv(file)
+    import_csv(client, csv)
+
+    pos = get_positions(client, filter=Filter(symbol="aaa"))
+    assert len(pos) == 0
+    pos = get_positions(client, filter=Filter(symbol="PRU 03/18/2022 110.00 P"))
+    assert len(pos) == 1
+    pos = get_positions(client, filter=Filter(symbol="PRU 03/18/2022.*"))
+    assert len(pos) == 2
+
+
+def test_filter_underlying() -> None:
+    client = mongomock.MongoClient()
+    file = Path(__file__).parent.absolute() / "data" / "open_close4.csv"
+    csv = load_csv(file)
+    import_csv(client, csv)
+
+    pos = get_positions(client, filter=Filter(underlying="aaa"))
+    assert len(pos) == 0
+    pos = get_positions(client, filter=Filter(underlying="P"))
+    assert len(pos) == 0
+    pos = get_positions(client, filter=Filter(underlying="PRU"))
+    assert len(pos) == 2
+
+
+
+def test_range_query() -> None:
+    client = mongomock.MongoClient()
+    file = Path(__file__).parent.absolute() / "data" / "open_close4.csv"
+    csv = load_csv(file)
+    import_csv(client, csv)
+
+    fltr = Filter()
+    pos = get_positions(client, filter=fltr)
+    assert len(pos) == 2
+
+    fltr.range = Range(start='02/08/2022')
+    pos = get_positions(client, filter=fltr)
+    assert len(pos) == 1
+
+    fltr.range = Range(end='02/08/2022')
+    pos = get_positions(client, filter=fltr)
+    assert len(pos) == 2
