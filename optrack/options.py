@@ -326,9 +326,9 @@ def import_csv(client: MongoClient, lines: List[CSVLine]) -> None:
         insert = asdict(line)
         insert["insertion_date"] = now
         insert["action"] = insert["action"].name
-        insert["fees"] = format_price(insert['fees'])
-        insert["price"] = format_price(insert['price'])
-        insert["amount"] = format_price(insert['amount'])
+        insert["fees"] = format_price(insert["fees"])
+        insert["price"] = format_price(insert["price"])
+        insert["amount"] = format_price(insert["amount"])
         insert["quantity"] = f"{insert['quantity']}"
         if line.is_option():
             tokens = line.symbol.split(" ")

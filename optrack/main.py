@@ -22,7 +22,9 @@ def main(cfg: DictConfig) -> None:
         for pos in positions:
             print(f"Position: {pos.strategy}")
             for leg in pos.legs:
-                print(f"\t{leg.symbol}, contracts={leg.quantity_sum()} open={leg.open_price_avg()}, close={leg.close_price_avg()}")
+                print(
+                    f"\t{leg.symbol}, contracts={leg.quantity_sum()} open={leg.open_price_avg()}, close={leg.close_price_avg()}"
+                )
 
 
 if __name__ == "__main__":

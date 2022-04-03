@@ -64,6 +64,7 @@ def test_import_csv():
         }
     ]
 
+
 def test_import_csv2():
     file = Path(__file__).parent.absolute() / "data" / "open2.csv"
     csv = load_csv(file)
@@ -108,7 +109,7 @@ def test_import_csv2():
             "underlying": "PRU",
             "strike": "110.00",
             "expiration": "03/18/2022",
-        }
+        },
     ]
 
 
@@ -220,3 +221,65 @@ def test_open_close2():
     assert leg.quantity_sum() == 0
     assert leg.open_price_avg() == Decimal("2")
     assert leg.close_price_avg() == Decimal("1")
+
+
+def test_open_close3():
+    client = mongomock.MongoClient()
+    file = Path(__file__).parent.absolute() / "data" / "open_close3.csv"
+    csv = load_csv(file)
+    import_csv(client, csv)
+
+    pos = get_positions(client)
+
+    assert len(pos) == 2
+    assert pos == [
+        Position(
+            Strategy.CUSTOM,
+            legs=[
+                Leg(symbol="PRU 03/18/2022 100.00 P", lines=[csv[0], csv[2]]),
+            ],
+        ),
+        Position(
+            Strategy.CUSTOM,
+            legs=[
+                Leg(symbol="PRU 03/18/2022 110.00 P", lines=[csv[1]]),
+            ],
+        ),
+    ]
+    assert pos[0].is_closed()
+    assert not pos[1].is_closed()
+    assert pos[0].legs[0].open_price_avg() == Decimal("1.66")
+    assert pos[0].legs[0].close_price_avg() == Decimal("0.77")
+    assert pos[1].legs[0].open_price_avg() == Decimal("1.61")
+    assert pos[1].legs[0].close_price_avg() is None
+
+
+def test_open_close4():
+    client = mongomock.MongoClient()
+    file = Path(__file__).parent.absolute() / "data" / "open_close4.csv"
+    csv = load_csv(file)
+    import_csv(client, csv)
+
+    pos = get_positions(client)
+
+    assert len(pos) == 2
+    assert pos == [
+        Position(
+            Strategy.CUSTOM,
+            legs=[
+                Leg(symbol="PRU 03/18/2022 100.00 P", lines=[csv[0], csv[1], csv[2], csv[3], csv[5]]),
+            ],
+        ),
+        Position(
+            Strategy.CUSTOM,
+            legs=[
+                Leg(symbol="PRU 03/18/2022 110.00 P", lines=[csv[4]]),
+            ],
+        ),
+    ]
+    assert pos[0].is_closed()
+    assert not pos[1].is_closed()
+    assert pos[0].legs[0].open_price_avg() == Decimal("1.66")
+    assert pos[0].legs[0].close_price_avg() == Decimal("0.762")
+    assert pos[1].legs[0].open_price_avg() == Decimal("1.61")
+    assert pos[1].legs[0].close_price_avg() is None
