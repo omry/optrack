@@ -263,6 +263,30 @@ class Position:
             for cl in leg.lines:
                 found_leg.lines.append(cl)
 
+    def symbols(self) -> str:
+        return [x.symbol for x in self.legs]
+
+    def __repr__(self) -> str:
+        symbols = self.symbols()
+        symb = symbols if len(symbols) > 1 else symbols[0]
+        legs = ""
+        def leg_str(x: Leg) -> str:
+            if x.is_closed():
+                return f"{x.symbol}: open:{x.open_price_avg()}, close:{x.close_price_avg()}"
+            else:
+                return f"{x.symbol}: open:{x.open_price_avg()}"
+
+        if len(self.legs) == 0:
+            legs = 'No legs'
+        elif len(self.legs) == 1:
+            legs = leg_str(self.legs[0])
+        elif len(self.legs) > 1:
+            lst = [leg_str(x) for x in self.legs]
+            legs = ",".join(lst)
+
+
+        return f"{symb}, {'Closed' if self.is_closed() else 'Open'}: {legs}"
+
 
 def load_csv(filename: Union[Path, str]) -> List[CSVLine]:
     import csv
