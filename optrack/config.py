@@ -17,8 +17,9 @@ class Input:
 
 @dataclass
 class Range:
-    # starting date >=. If missing all
+    # starting date >=, if missing no starting date
     start: Optional[str] = None
+    # ending date <=, if missing no ending date
     end: Optional[str] = None
 
 
@@ -34,12 +35,18 @@ class Filter:
 
 
 @dataclass
+class Output:
+    data_format: str = '%m/%d/%Y'
+    max_table_width: int = 120
+
+@dataclass
 class Config:
     # list, import
     action: str = "list"
     db: DB = DB()
     input: Input = Input()
     filter: Filter = Filter()
+    output: Output = Output()
 
 
 ConfigStore.instance().store(group="optrack", name="schema", node=Config)

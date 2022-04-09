@@ -5,6 +5,10 @@ defaults:
 input:
   file: schwab-transactions-dump.csv
 
+output:
+  max_table_width: 120
+  output_date_format: %m/%d/%Y
+
 db:
   url: mongodb://localhost:27017
 
